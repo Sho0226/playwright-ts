@@ -1,0 +1,32 @@
+name: Reservation Monitor
+
+on:
+  schedule:
+    # 30分ごとに実行 (UTCなので日本時間と9時間のズレあり)
+    - cron: "*/30 * * * *"
+  # 手動でも実行できるようにする
+  workflow_dispatch:
+
+jobs:
+  check-availability:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps
+
+      - name: Run the monitoring script
+        env:
+          # GitHubのSecretsからWebhook URLを環境変数として渡す
+          WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
+        run: npx tsx src/app/blueberry.ts

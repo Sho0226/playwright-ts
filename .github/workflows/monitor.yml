@@ -3,7 +3,7 @@ name: Reservation Monitor
 on:
   schedule:
     # 30分ごとに実行 (UTCなので日本時間と9時間のズレあり)
-    - cron: "*/30 * * * *"
+    - cron: "*/10 * * * *"
   # 手動でも実行できるようにする
   workflow_dispatch:
 

@@ -29,4 +29,5 @@ jobs:
         env:
           # GitHubのSecretsからWebhook URLを環境変数として渡す
           WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
+          ALERT_WEBHOOK_URL: ${{ secrets.ALERT_WEBHOOK_URL }}
         run: npx tsx src/app/blueberry.ts

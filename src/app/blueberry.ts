@@ -13,6 +13,7 @@ const TARGET_URLS = [
 const SELECTORS = {
   unavailable: ".c-mark.c-mark--blank.c-mark--xs.text-custom-muted-text", // 予約不可
   full: ".c-mark.c-mark--ng.c-mark--xs.text-custom-muted-text", // 空きなし
+  little: ".c-mark.c-mark--warning.c-mark--xs.text-custom-muted-text", // 少し空きあり
   available: ".c-mark.c-mark--ok.c-mark--xs.text-custom-muted-text", // 予約可能
 };
 
@@ -24,6 +25,7 @@ interface Stats {
   month: string;
   unavailable: number;
   full: number;
+  little: number;
   available: number;
 }
 
@@ -84,7 +86,9 @@ async function sendAvailabilityAlert(stats: Stats[]) {
     return;
   }
 
-  const availableSlots = stats.filter((stat) => stat.available > 0);
+  const availableSlots = stats.filter(
+    (stat) => stat.available + stat.little > 0
+  );
   if (availableSlots.length === 0) return;
 
   const timestamp = new Date().toLocaleString("ja-JP", {
@@ -94,11 +98,13 @@ async function sendAvailabilityAlert(stats: Stats[]) {
   let alertMessage = `🚨 **【緊急】予約枠が空きました！** 🚨\n🕐 ${timestamp}\n\n`;
 
   availableSlots.forEach((stat) => {
-    alertMessage += `🎯 **${stat.month}**: ${stat.available}個の予約可能枠あり！\n`;
+    alertMessage += `🎯 **${stat.month}**: ${
+      stat.available + stat.little
+    }個の予約可能枠あり！\n`;
   });
 
   const totalAvailable = availableSlots.reduce(
-    (sum, stat) => sum + stat.available,
+    (sum, stat) => sum + stat.available + stat.little,
     0
   );
   alertMessage += `\n💥 **合計 ${totalAvailable}個の枠が予約可能です！**\n`;
@@ -151,6 +157,9 @@ function formatDiscordStats(stats: Stats[]): string {
     message += `${stat.unavailable > 0 ? "⚪️" : "⚫"} 予約不可: \`${
       stat.unavailable
     }\`個\n`;
+    message += `${stat.little > 0 ? "⚠️" : "⚫"} 少し空きあり: \`${
+      stat.little
+    }\`個\n`;
     message += `${stat.full > 0 ? "❌" : "⚫"} 空きなし: \`${stat.full}\`個\n`;
     message += `${stat.available > 0 ? "✅" : "⚫"} **予約可: \`${
       stat.available
@@ -160,9 +169,13 @@ function formatDiscordStats(stats: Stats[]): string {
   });
 
   // 合計と結果サマリー
-  const totalAvailable = stats.reduce((sum, stat) => sum + stat.available, 0);
+  const totalAvailable = stats.reduce(
+    (sum, stat) => sum + stat.available + stat.little,
+    0
+  );
   const totalSlots = stats.reduce(
-    (sum, stat) => sum + stat.unavailable + stat.full + stat.available,
+    (sum, stat) =>
+      sum + stat.unavailable + stat.full + stat.available + stat.little,
     0
   );
 
@@ -200,16 +213,19 @@ async function monitorReservations() {
         (await page.locator(".h3.mb-0").textContent()) || "不明";
 
       // 各アイコンの数を取得
-      const [unavailableCount, fullCount, availableCount] = await Promise.all([
-        page.locator(SELECTORS.unavailable).count(),
-        page.locator(SELECTORS.full).count(),
-        page.locator(SELECTORS.available).count(),
-      ]);
+      const [unavailableCount, fullCount, littleCount, availableCount] =
+        await Promise.all([
+          page.locator(SELECTORS.unavailable).count(),
+          page.locator(SELECTORS.full).count(),
+          page.locator(SELECTORS.little).count(),
+          page.locator(SELECTORS.available).count(),
+        ]);
 
       const stat: Stats = {
         month: monthText,
         unavailable: unavailableCount,
         full: fullCount,
+        little: littleCount,
         available: availableCount,
       };
 
@@ -219,6 +235,7 @@ async function monitorReservations() {
       console.log(`\n--- [${monthText}] の統計結果 ---`);
       console.log(`⚪️ 予約不可: ${unavailableCount} 個`);
       console.log(`❌ 空きなし: ${fullCount} 個`);
+      console.log(`⚠️ 少し空きあり: ${littleCount} 個`);
       console.log(`✅ 予約可: ${availableCount} 個`);
       console.log("---------------------------------");
     }

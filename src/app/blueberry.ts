@@ -1,4 +1,4 @@
-import { chromium } from "playwright";
+import { chromium, Page } from "playwright";
 import * as dotenv from "dotenv";
 
 // .envファイルを読み込む
@@ -13,6 +13,7 @@ const TARGET_URLS = [
 const SELECTORS = {
   unavailable: ".c-mark.c-mark--blank.c-mark--xs.text-custom-muted-text", // 予約不可
   full: ".c-mark.c-mark--ng.c-mark--xs.text-custom-muted-text", // 空きなし
+  // 正しいセレクター（デベロッパーツールで確認した実際のクラス名）
   little: ".c-mark.c-mark--warningOk.c-mark--xs.text-custom-muted-text", // 少し空きあり
   available: ".c-mark.c-mark--ok.c-mark--xs.text-custom-muted-text", // 予約可能
 };
@@ -60,7 +61,6 @@ async function sendDiscordNotification(
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         username: "予約監視Bot",
-        avatar_url: "https://cdn.discordapp.com/emojis/🤖.png",
         embeds: [embed],
       }),
     });
@@ -69,6 +69,8 @@ async function sendDiscordNotification(
       console.log("✅ Discord通知を送信しました");
     } else {
       console.error("❌ Discord通知の送信に失敗:", response.status);
+      const errorText = await response.text();
+      console.error("エラー詳細:", errorText);
     }
   } catch (error) {
     console.error("❌ Discord通知送信エラー:", error);
@@ -89,7 +91,22 @@ async function sendAvailabilityAlert(stats: Stats[]) {
   const availableSlots = stats.filter(
     (stat) => stat.available + stat.little > 0
   );
-  if (availableSlots.length === 0) return;
+
+  // デバッグ用：アラート条件の確認
+  console.log("🔍 アラート条件チェック:");
+  stats.forEach((stat) => {
+    console.log(
+      `  ${stat.month}: 予約可=${stat.available}, 残りわずか=${
+        stat.little
+      }, 合計=${stat.available + stat.little}`
+    );
+  });
+  console.log(`📊 アラート対象スロット数: ${availableSlots.length}`);
+
+  if (availableSlots.length === 0) {
+    console.log("❌ 予約可能枠がないため、アラートをスキップします");
+    return;
+  }
 
   const timestamp = new Date().toLocaleString("ja-JP", {
     timeZone: "Asia/Tokyo",
@@ -98,9 +115,13 @@ async function sendAvailabilityAlert(stats: Stats[]) {
   let alertMessage = `🚨 **【緊急】予約枠が空きました！** 🚨\n🕐 ${timestamp}\n\n`;
 
   availableSlots.forEach((stat) => {
-    alertMessage += `🎯 **${stat.month}**: ${
+    const details = [];
+    if (stat.available > 0) details.push(`予約可:${stat.available}個`);
+    if (stat.little > 0) details.push(`残りわずか:${stat.little}個`);
+
+    alertMessage += `🎯 **${stat.month}**: ${details.join(", ")} (計${
       stat.available + stat.little
-    }個の予約可能枠あり！\n`;
+    }個)\n`;
   });
 
   const totalAvailable = availableSlots.reduce(
@@ -109,6 +130,8 @@ async function sendAvailabilityAlert(stats: Stats[]) {
   );
   alertMessage += `\n💥 **合計 ${totalAvailable}個の枠が予約可能です！**\n`;
   alertMessage += `⚡ **今すぐ予約サイトをチェックしてください！**`;
+
+  console.log("🚨 アラート送信開始:", alertMessage);
 
   try {
     const embed = {
@@ -126,16 +149,17 @@ async function sendAvailabilityAlert(stats: Stats[]) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         username: "🚨予約アラートBot🚨",
-        avatar_url: "https://cdn.discordapp.com/emojis/🚨.png",
         embeds: [embed],
         content: "@everyone", // メンション通知
       }),
     });
 
     if (response.ok) {
-      console.log("🚨 緊急アラート通知を送信しました");
+      console.log("✅ 緊急アラート通知を送信しました");
     } else {
       console.error("❌ 緊急アラート通知の送信に失敗:", response.status);
+      const errorText = await response.text();
+      console.error("エラー詳細:", errorText);
     }
   } catch (error) {
     console.error("❌ 緊急アラート通知送信エラー:", error);
@@ -193,6 +217,40 @@ function formatDiscordStats(stats: Stats[]): string {
 }
 
 /**
+ * エラーオブジェクトを安全に文字列に変換
+ */
+function formatError(error: unknown): string {
+  if (error instanceof Error) {
+    return `${error.name}: ${error.message}\n${error.stack || ""}`;
+  }
+  return String(error);
+}
+
+/**
+ * デバッグ用：セレクターの動作確認
+ */
+async function debugSelectors(page: Page) {
+  console.log("🔍 セレクターデバッグ開始...");
+
+  // 全てのc-markクラスを持つ要素を検索
+  const allMarks = await page.locator(".c-mark").all();
+  console.log(`📊 総c-mark要素数: ${allMarks.length}`);
+
+  // 各要素のクラス名を確認
+  for (let i = 0; i < Math.min(allMarks.length, 10); i++) {
+    const className = await allMarks[i].getAttribute("class");
+    const text = await allMarks[i].textContent();
+    console.log(`  要素${i}: class="${className}", text="${text}"`);
+  }
+
+  // 各セレクターの要素数を確認
+  for (const [key, selector] of Object.entries(SELECTORS)) {
+    const count = await page.locator(selector).count();
+    console.log(`📌 ${key} (${selector}): ${count}個`);
+  }
+}
+
+/**
  * メイン処理：予約状況を監視
  */
 async function monitorReservations() {
@@ -206,7 +264,10 @@ async function monitorReservations() {
     for (const url of TARGET_URLS) {
       console.log(`📄 ページを確認中: ${url}`);
 
-      await page.goto(url, { waitUntil: "domcontentloaded" });
+      await page.goto(url, { waitUntil: "domcontentloaded", timeout: 30000 });
+
+      // デバッグ用：セレクターの動作確認
+      await debugSelectors(page);
 
       // 月の表示を取得
       const monthText =
@@ -238,6 +299,13 @@ async function monitorReservations() {
       console.log(`⚠️ 少し空きあり: ${littleCount} 個`);
       console.log(`✅ 予約可: ${availableCount} 個`);
       console.log("---------------------------------");
+
+      // 個別でもアラートチェック
+      if (littleCount > 0 || availableCount > 0) {
+        console.log(
+          `🚨 [${monthText}] で予約枠を発見！ 予約可:${availableCount}, 残りわずか:${littleCount}`
+        );
+      }
     }
 
     // Discord通知を送信
@@ -245,12 +313,15 @@ async function monitorReservations() {
     await sendDiscordNotification(message);
 
     // 予約枠が空いていれば緊急通知も送信
+    console.log("🔍 アラート送信前の最終チェック...");
     await sendAvailabilityAlert(stats);
   } catch (error) {
     console.error("❌ 監視処理中にエラーが発生:", error);
 
-    // エラーもDiscordに通知
-    const errorMessage = `予約監視処理でエラーが発生しました\n\n**エラー詳細:**\n\`\`\`\n${error}\n\`\`\``;
+    // エラーもDiscordに通知（型安全に変換）
+    const errorMessage = `予約監視処理でエラーが発生しました\n\n**エラー詳細:**\n\`\`\`\n${formatError(
+      error
+    )}\n\`\`\``;
     await sendDiscordNotification(errorMessage, true);
   } finally {
     await browser.close();

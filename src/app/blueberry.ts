@@ -13,7 +13,7 @@ const TARGET_URLS = [
 const SELECTORS = {
   unavailable: ".c-mark.c-mark--blank.c-mark--xs.text-custom-muted-text", // 予約不可
   full: ".c-mark.c-mark--ng.c-mark--xs.text-custom-muted-text", // 空きなし
-  little: ".c-mark.c-mark--warning.c-mark--xs.text-custom-muted-text", // 少し空きあり
+  little: ".c-mark.c-mark--warningOk.c-mark--xs.text-custom-muted-text", // 少し空きあり
   available: ".c-mark.c-mark--ok.c-mark--xs.text-custom-muted-text", // 予約可能
 };
 

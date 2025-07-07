@@ -11,11 +11,10 @@ const TARGET_URLS = [
 ];
 
 const SELECTORS = {
-  unavailable: ".c-mark.c-mark--blank.c-mark--xs.text-custom-muted-text", // 予約不可
-  full: ".c-mark.c-mark--ng.c-mark--xs.text-custom-muted-text", // 空きなし
-  // 正しいセレクター（デベロッパーツールで確認した実際のクラス名）
-  little: ".c-mark.c-mark--warningOk.c-mark--xs.text-custom-muted-text", // 少し空きあり
-  available: ".c-mark.c-mark--ok.c-mark--xs.text-custom-muted-text", // 予約可能
+  unavailable: '.inner i[title="予約不可"]',
+  full: '.inner i[title="空きなし"]',
+  little: '.inner i[title="少し空きあり"]',
+  available: '.inner i[title="予約可能"]',
 };
 
 // Webhook URLを環境変数から取得

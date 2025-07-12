@@ -13,8 +13,8 @@ const TARGET_URLS = [
 const SELECTORS = {
   unavailable: '.inner i[title="予約不可"]',
   full: '.inner i[title="空きなし"]',
-  little: '.inner i[title="少し空きあり"]',
-  available: '.inner i[title="予約可能"]',
+  little: '.inner span[title="残りわずか"]',
+  available: '.inner span[title="予約可能"]',
 };
 
 // Webhook URLを環境変数から取得
@@ -129,6 +129,7 @@ async function sendAvailabilityAlert(stats: Stats[]) {
   );
   alertMessage += `\n💥 **合計 ${totalAvailable}個の枠が予約可能です！**\n`;
   alertMessage += `⚡ **今すぐ予約サイトをチェックしてください！**`;
+  alertMessage += `\n\n🔗 [予約サイトはこちら](${TARGET_URLS[0]})`;
 
   console.log("🚨 アラート送信開始:", alertMessage);
 
